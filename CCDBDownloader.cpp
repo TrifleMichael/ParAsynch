@@ -536,11 +536,48 @@ CURL* testHandle(std::string* dst)
   return handle;
 }
 
+void performTest()
+{
+  // Inicjalizacja libcurl
+  if (curl_global_init(CURL_GLOBAL_ALL))
+  {
+    fprintf(stderr, "Could not init curl\n");
+  }
 
+  // Przygotowanie Downloadera
+  CCDBDownloader downloader;
+
+  // Przygotowanie punktu docelowego dla danych
+  std::string dst = "";
+
+  // Przygotowanie urchywu libcurl easy
+  CURL* handle = testHandle(&dst);
+
+  // Pobranie danych
+  CURLcode curlCode = downloader.perform(handle);
+  
+  // Weryfikacja poprawności
+  if (curlCode != CURLE_OK) std::cout << "Invalid CURL Code: " << curlCode << "\n";
+  long httpCode;
+  curl_easy_getinfo(handle, CURLINFO_HTTP_CODE, &httpCode);
+  if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
+
+  // std::cout << dst << "\n";
+
+  // Sprzątanie po teście
+  curl_easy_cleanup(handle);
+  curl_global_cleanup();
+}
 
 void batchTest()
 {
+  if (curl_global_init(CURL_GLOBAL_ALL))
+  {
+    fprintf(stderr, "Could not init curl\n");
+  }
+
   CCDBDownloader downloader;
+
   std::vector<CURL*> handleVector;
   std::vector<std::string*> destinations;
   for(int i = 0; i < 10; i++) {
@@ -549,6 +586,7 @@ void batchTest()
   }
 
   auto curlCodes = downloader.batchBlockingPerform(handleVector);
+
   for(CURLcode code : curlCodes) {
     if (code != CURLE_OK) std::cout << "Invalid CURL Code: " << code << "\n";
   }
@@ -567,31 +605,6 @@ void batchTest()
   curl_global_cleanup();
 }
 
-void performTest()
-{
-  if (curl_global_init(CURL_GLOBAL_ALL))
-  {
-    fprintf(stderr, "Could not init curl\n");
-  }
-
-  CCDBDownloader downloader;
-  std::string dst = "";
-  CURL* handle = testHandle(&dst);
-
-  CURLcode curlCode = downloader.perform(handle);
-  
-
-  if (curlCode != CURLE_OK) std::cout << "Invalid CURL Code: " << curlCode << "\n";
-
-  long httpCode;
-  curl_easy_getinfo(handle, CURLINFO_HTTP_CODE, &httpCode);
-  if (!(httpCode == 200)) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
-
-  curl_easy_cleanup(handle);
-
-  curl_global_cleanup();
-}
-
 void testCallback(void* ptr)
 {
   int* x = (int*)ptr;
@@ -600,6 +613,11 @@ void testCallback(void* ptr)
 
 void asynchTest()
 {
+  if (curl_global_init(CURL_GLOBAL_ALL))
+  {
+    fprintf(stderr, "Could not init curl\n");
+  }
+
   CCDBDownloader downloader;
   std::vector<CURL*> handleVector;
   std::vector<std::string*> destinations;
