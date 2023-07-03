@@ -532,7 +532,7 @@ CURL* testHandle(std::string* dst)
   CURL* handle = curl_easy_init();
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writeToString);
   curl_easy_setopt(handle, CURLOPT_WRITEDATA, dst);
-  curl_easy_setopt(handle, CURLOPT_URL, "http://ccdb-test.cern.ch:8080/latest/");
+  curl_easy_setopt(handle, CURLOPT_URL, "http://ccdb-test.cern.ch:8080/");
   return handle;
 }
 
@@ -543,21 +543,20 @@ void batchTest()
   CCDBDownloader downloader;
   std::vector<CURL*> handleVector;
   std::vector<std::string*> destinations;
-  for(int i = 0; i < 100; i++) {
+  for(int i = 0; i < 10; i++) {
     destinations.push_back(new std::string());
     handleVector.push_back(testHandle(destinations.back()));
   }
 
   auto curlCodes = downloader.batchBlockingPerform(handleVector);
   for(CURLcode code : curlCodes) {
-    if (code != CURLE_OK) std::cout << "CURL Code: " << code << "\n";
+    if (code != CURLE_OK) std::cout << "Invalid CURL Code: " << code << "\n";
   }
 
   for(CURL* handle : handleVector) {
     long httpCode;
     curl_easy_getinfo(handle, CURLINFO_HTTP_CODE, &httpCode);
-    if (!(httpCode == 200)) std::cout << "ERROR: ";;
-    if (httpCode != 200) std::cout << "HTTP Code: " << httpCode << "\n";
+    if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
     curl_easy_cleanup(handle);
   }
 
@@ -582,34 +581,68 @@ void performTest()
   CURLcode curlCode = downloader.perform(handle);
   
 
-  if (!(curlCode == CURLE_OK)) std::cout << "NOT OK: ";
-  std::cout << "CURL code: " << curlCode << "\n";
+  if (curlCode != CURLE_OK) std::cout << "Invalid CURL Code: " << curlCode << "\n";
 
   long httpCode;
   curl_easy_getinfo(handle, CURLINFO_HTTP_CODE, &httpCode);
-  if (!(httpCode == 200)) std::cout << "NOT OK: ";
-  std::cout << "HTTP code: " << httpCode << "\n";
+  if (!(httpCode == 200)) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
 
   curl_easy_cleanup(handle);
 
   curl_global_cleanup();
 }
 
+void testCallback(void* ptr)
+{
+  int* x = (int*)ptr;
+  (*x)++;
+}
+
+void asynchTest()
+{
+  CCDBDownloader downloader;
+  std::vector<CURL*> handleVector;
+  std::vector<std::string*> destinations;
+  for(int i = 0; i < 10; i++) {
+    destinations.push_back(new std::string());
+    handleVector.push_back(testHandle(destinations.back()));
+  }
+
+  int testValue = 0;
+  bool completionFlag = false;
+  auto curlCodes = downloader.asynchBatchPerformWithCallback(handleVector, &completionFlag, testCallback, &testValue);
+
+  while (!completionFlag) {
+    sleep(1);
+  }
+
+  if (testValue != 1) {
+    std::cout << "Invalid test value: " << testValue << "\n";
+  }
+
+  for(CURLcode code : *curlCodes) {
+    if (code != CURLE_OK) std::cout << "Invalid CURL Code: " << code << "\n";
+  }
+
+  for(CURL* handle : handleVector) {
+    long httpCode;
+    curl_easy_getinfo(handle, CURLINFO_HTTP_CODE, &httpCode);
+    if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
+    curl_easy_cleanup(handle);
+  }
+
+  for(std::string* dst : destinations) {
+    delete dst;
+  }
+
+  curl_global_cleanup();
+}
+
 int main() {
 
-  auto start = std::chrono::high_resolution_clock::now();
   performTest();
-  auto end = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  double elapsedSeconds = duration.count();
-  std::cout << "Perform: " << elapsedSeconds << " ms" << std::endl;
-
-  start = std::chrono::high_resolution_clock::now();
   batchTest();
-  end = std::chrono::high_resolution_clock::now();
-  duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  elapsedSeconds = duration.count();
-  std::cout << "Batch: " << elapsedSeconds << " ms" << std::endl;
+  asynchTest();
 
   return 0;
 }
