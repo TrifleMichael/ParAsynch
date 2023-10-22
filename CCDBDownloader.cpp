@@ -692,6 +692,7 @@ void downloader_benchmark(int TEST_SAMPLE = 10)
     curl_easy_getinfo(handles[i], CURLINFO_HTTP_CODE, &httpCode);
     if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
     curl_easy_cleanup(handles[i]);
+    delete dsts[i];
   }
 }
 
@@ -718,6 +719,7 @@ void standalone_benchmark(int TEST_SAMPLE = 10)
     curl_easy_getinfo(stand_alone_handles[i], CURLINFO_HTTP_CODE, &httpCode);
     if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
     curl_easy_cleanup(stand_alone_handles[i]);
+    delete standalone_dsts[i];
   }
 }
 
@@ -747,6 +749,7 @@ void single_handle_benchmark(int TEST_SAMPLE = 10)
 
   for(int i = 0; i < TEST_SAMPLE; i++) {
     if (codes[i] != CURLE_OK) std::cout << "Invalid CURL Code: " << codes[i] << "\n";
+    delete dsts[i];
   } 
     
 }
@@ -761,9 +764,12 @@ void comparison_test()
 
   int TEST_SAMPLE = 10;
 
-  downloader_benchmark(TEST_SAMPLE);
+  // Tylko CURL - Użycie osobnych uchwytów dla każdego transfera
   standalone_benchmark(TEST_SAMPLE);
+  // Tylko CURL - Jeden uchwyt dla wszystkich transferów
   single_handle_benchmark(TEST_SAMPLE);
+  // Downloader - Wykorzystuje multihandle i zrównoleglanie
+  downloader_benchmark(TEST_SAMPLE);
 
   curl_global_cleanup(); 
 }
