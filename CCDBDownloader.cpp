@@ -569,7 +569,7 @@ void performTest()
   curl_global_cleanup();
 }
 
-void batchTest()
+void getBatch(std::vector<std::string> urls)
 {
   if (curl_global_init(CURL_GLOBAL_ALL))
   {
@@ -580,8 +580,13 @@ void batchTest()
 
   std::vector<CURL*> handleVector;
   std::vector<std::string*> destinations;
-  for(int i = 0; i < 10; i++) {
+
+  for(int i = 0; i < urls.size(); i++) {
     destinations.push_back(new std::string());
+    CURL* handle = curl_easy_init();
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writeToString);
+    curl_easy_setopt(handle, CURLOPT_WRITEDATA, destinations.back());
+    curl_easy_setopt(handle, CURLOPT_URL, urls[i]);
     handleVector.push_back(testHandle(destinations.back()));
   }
 
@@ -598,55 +603,10 @@ void batchTest()
     curl_easy_cleanup(handle);
   }
 
-  for(std::string* dst : destinations) {
-    delete dst;
-  }
-
-  curl_global_cleanup();
-}
-
-void testCallback(void* ptr)
-{
-  int* x = (int*)ptr;
-  (*x)++;
-}
-
-void asynchTest()
-{
-  if (curl_global_init(CURL_GLOBAL_ALL))
-  {
-    fprintf(stderr, "Could not init curl\n");
-  }
-
-  CCDBDownloader downloader;
-  std::vector<CURL*> handleVector;
-  std::vector<std::string*> destinations;
-  for(int i = 0; i < 10; i++) {
-    destinations.push_back(new std::string());
-    handleVector.push_back(testHandle(destinations.back()));
-  }
-
-  int testValue = 0;
-  bool completionFlag = false;
-  auto curlCodes = downloader.asynchBatchPerformWithCallback(handleVector, &completionFlag, testCallback, &testValue);
-
-  while (!completionFlag) {
-    sleep(1);
-  }
-
-  if (testValue != 1) {
-    std::cout << "Invalid test value: " << testValue << "\n";
-  }
-
-  for(CURLcode code : *curlCodes) {
-    if (code != CURLE_OK) std::cout << "Invalid CURL Code: " << code << "\n";
-  }
-
-  for(CURL* handle : handleVector) {
-    long httpCode;
-    curl_easy_getinfo(handle, CURLINFO_HTTP_CODE, &httpCode);
-    if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
-    curl_easy_cleanup(handle);
+  for(auto dst : destinations) {
+    if (dst->size() == 0) {
+      std::cout << "Nothing received\n";
+    }
   }
 
   for(std::string* dst : destinations) {
@@ -654,135 +614,12 @@ void asynchTest()
   }
 
   curl_global_cleanup();
-}
-
-CURL* comparison_handle(std::string* dst)
-{
-  CURL* handle = curl_easy_init();
-  curl_easy_setopt(handle, CURLOPT_URL, "http://ccdb-test.cern.ch:8080/");
-  curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writeToString);
-  curl_easy_setopt(handle, CURLOPT_WRITEDATA, dst);
-  return handle;
-}
-
-void downloader_benchmark(int TEST_SAMPLE = 10)
-{
-  using namespace std::chrono;
-  // Przygotowanie Downloadera
-  CCDBDownloader downloader;
-
-  std::vector<std::string*> dsts;
-  std::vector<CURL*> handles;
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    dsts.push_back(new std::string());
-    handles.push_back(comparison_handle(dsts.back()));
-  }
-
-  // Pobranie danych
-  auto start = high_resolution_clock::now();
-  std::vector<CURLcode> codeVector = downloader.batchBlockingPerform(handles);
-  auto end = high_resolution_clock::now();
-  duration<double> duration = end - start;
-  std::cout << "Downloader benchmark: " << duration.count() * 1000. << " miliseconds" << std::endl;
-  
-  // Weryfikacja poprawności
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    if (codeVector[i] != CURLE_OK) std::cout << "Invalid CURL Code: " << codeVector[i] << "\n";
-    long httpCode;
-    curl_easy_getinfo(handles[i], CURLINFO_HTTP_CODE, &httpCode);
-    if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
-    curl_easy_cleanup(handles[i]);
-    delete dsts[i];
-  }
-}
-
-void standalone_benchmark(int TEST_SAMPLE = 10)
-{
-  using namespace std::chrono;
-  std::vector<std::string*> standalone_dsts;
-  std::vector<CURL*> stand_alone_handles;
-  std::vector<CURLcode> stand_alone_codes;
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    standalone_dsts.push_back(new std::string());
-    stand_alone_handles.push_back(comparison_handle(standalone_dsts.back()));
-  }
-  auto start = high_resolution_clock::now();
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    stand_alone_codes.push_back(curl_easy_perform(stand_alone_handles[i]));
-  }
-  auto end = high_resolution_clock::now();
-  duration<double> duration = end - start;
-  std::cout << "Standalone benchmark: " << duration.count() * 1000. << " miliseconds" << std::endl;
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    if (stand_alone_codes[i] != CURLE_OK) std::cout << "Invalid CURL Code: " << stand_alone_codes[i] << "\n";
-    long httpCode;
-    curl_easy_getinfo(stand_alone_handles[i], CURLINFO_HTTP_CODE, &httpCode);
-    if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
-    curl_easy_cleanup(stand_alone_handles[i]);
-    delete standalone_dsts[i];
-  }
-}
-
-void single_handle_benchmark(int TEST_SAMPLE = 10)
-{
-  using namespace std::chrono;
-  std::vector<std::string*> dsts;
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    dsts.push_back(new std::string());
-  }
-  std::vector<CURLcode> codes;
-  CURL* handle = curl_easy_init();
-  curl_easy_setopt(handle, CURLOPT_URL, "http://ccdb-test.cern.ch:8080/");
-  curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writeToString);
-  
-  auto start = high_resolution_clock::now();
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, dsts.back());
-    codes.push_back(curl_easy_perform(handle));
-    long httpCode;
-    curl_easy_getinfo(handle, CURLINFO_HTTP_CODE, &httpCode);
-    if (httpCode != 200) std::cout << "Invalid HTTP Code: " << httpCode << "\n";
-  }
-  auto end = high_resolution_clock::now();
-  duration<double> duration = end - start;
-  std::cout << "Single handle bechnmark: " << duration.count() * 1000. << " miliseconds" << std::endl;
-
-  for(int i = 0; i < TEST_SAMPLE; i++) {
-    if (codes[i] != CURLE_OK) std::cout << "Invalid CURL Code: " << codes[i] << "\n";
-    delete dsts[i];
-  } 
-    
-}
-
-void comparison_test()
-{
-  // Inicjalizacja libcurl
-  if (curl_global_init(CURL_GLOBAL_ALL))
-  {
-    fprintf(stderr, "Could not init curl\n");
-  }
-
-  int TEST_SAMPLE = 10;
-
-  // Tylko CURL - Użycie osobnych uchwytów dla każdego transfera
-  standalone_benchmark(TEST_SAMPLE);
-  // Tylko CURL - Jeden uchwyt dla wszystkich transferów
-  single_handle_benchmark(TEST_SAMPLE);
-  // Downloader - Wykorzystuje multihandle i zrównoleglanie
-  downloader_benchmark(TEST_SAMPLE);
-
-  curl_global_cleanup(); 
 }
 
 int main() {
 
-  // TODO delete stuff in tests
-
-  // performTest();
-  // batchTest();
-  // asynchTest();
-
-  comparison_test();
-
+  std::vector<std::string> urls;
+  urls.push_back("http://ccdb-test.cern.ch:8080/");
+  getBatch(urls);
   return 0;
 }
