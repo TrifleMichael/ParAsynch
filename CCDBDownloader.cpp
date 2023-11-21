@@ -569,7 +569,7 @@ void performTest()
   curl_global_cleanup();
 }
 
-void getBatch(std::vector<std::string> urls)
+void getBatch(std::vector<std::string> urls, bool show_responses)
 {
   if (curl_global_init(CURL_GLOBAL_ALL))
   {
@@ -604,6 +604,9 @@ void getBatch(std::vector<std::string> urls)
   }
 
   for(auto dst : destinations) {
+    if (show_responses) {
+      std::cout << *dst;
+    }
     if (dst->size() == 0) {
       std::cout << "Nothing received\n";
     }
@@ -620,6 +623,6 @@ int main() {
 
   std::vector<std::string> urls;
   urls.push_back("http://ccdb-test.cern.ch:8080/");
-  getBatch(urls);
+  getBatch(urls, true); // show_responses = true
   return 0;
 }
