@@ -586,8 +586,8 @@ void getBatch(std::vector<std::string> urls)
     CURL* handle = curl_easy_init();
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writeToString);
     curl_easy_setopt(handle, CURLOPT_WRITEDATA, destinations.back());
-    curl_easy_setopt(handle, CURLOPT_URL, urls[i]);
-    handleVector.push_back(testHandle(destinations.back()));
+    curl_easy_setopt(handle, CURLOPT_URL, urls[i].c_str());
+    handleVector.push_back(handle);
   }
 
   auto curlCodes = downloader.batchBlockingPerform(handleVector);
